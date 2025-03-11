@@ -61,7 +61,7 @@ class DataElement(MutableSequence['DataElement']):
                  xsd_type: Optional[BaseXsdType] = None,
                  ref_element: Optional['XsdElement'] = None,  # Houcai: add ref_element
                  occurs_idx: Optional[int] = None,  # Houcai: add index for group occurrence
-                 group_occurs_indices: Optional[int] = None) -> None:  # Houcai: add index for element occurrence
+                 group_occurs_indices: list[int] = None) -> None:  # Houcai: add index for element occurrence
 
         super().__init__()
         self._children = []
