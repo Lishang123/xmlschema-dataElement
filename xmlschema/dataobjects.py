@@ -529,7 +529,10 @@ class DataElementConverter(XMLSchemaConverter):
             nsmap=self._namespaces if self._use_namespaces else None,
             xmlns=xmlns,
             xsd_element=xsd_element,
-            xsd_type=xsd_type
+            xsd_type=xsd_type,
+            ref_element=data.ref_element,  # Houcai: add ref_element
+            occurs_idx=data.occurs_idx,  # Houcai: add occurs_idx
+            group_occurs_indices=data.group_occurs_indices  # Houcai: add group_occurs_indices
         )
 
     def element_decode(self, data: ElementData, xsd_element: 'XsdElement',
