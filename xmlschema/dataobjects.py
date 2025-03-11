@@ -58,7 +58,10 @@ class DataElement(MutableSequence['DataElement']):
                  nsmap: Optional[MutableMapping[str, str]] = None,
                  xmlns: Optional[List[Tuple[str, str]]] = None,
                  xsd_element: Optional['XsdElement'] = None,
-                 xsd_type: Optional[BaseXsdType] = None) -> None:
+                 xsd_type: Optional[BaseXsdType] = None,
+                 ref_element: Optional['XsdElement'] = None,  # Houcai: add ref_element
+                 occurs_idx: Optional[int] = None,  # Houcai: add index for group occurrence
+                 group_occurs_indices: Optional[int] = None) -> None:  # Houcai: add index for element occurrence
 
         super().__init__()
         self._children = []
@@ -78,6 +81,9 @@ class DataElement(MutableSequence['DataElement']):
         if xsd_element is not None:
             self.xsd_element = xsd_element
             self.xsd_type = xsd_type or xsd_element.type
+            self.ref_element = ref_element  # Houcai: add ref_element
+            self.occurs_idx = occurs_idx  # Houcai
+            self.group_occurs_indices = group_occurs_indices  # Houcai
         elif xsd_type is not None:
             self.xsd_type = xsd_type
         elif self.xsd_element is not None:

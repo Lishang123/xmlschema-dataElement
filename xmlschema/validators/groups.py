@@ -12,7 +12,7 @@ This module contains classes for XML Schema model groups.
 """
 import warnings
 from collections.abc import MutableMapping
-from copy import copy as _copy
+from copy import copy as _copy, deepcopy
 from typing import TYPE_CHECKING, cast, overload, Any, Iterable, Iterator, \
     List, MutableSequence, Optional, Tuple, Union
 from xml.etree import ElementTree
@@ -228,43 +228,64 @@ class XsdGroup(XsdComponent, MutableSequence[ModelParticleType],
 
     @property
     def effective_max_occurs(self) -> Optional[int]:
+        # (Li) trivial case: if the maxOccurs = 0, then the group is not allowed to appear.
         if self.max_occurs == 0 or not self:
             return 0
 
         effective_items: List[Any]
-        max_occurs: int
+        max_occurs: int # (Li) this should be res?
 
+        # (li) get effective max occurs for each particle in the model group.
         model_items = [(e, e.effective_max_occurs) for e in self.iter_model()]
+        # (Li) only consider the items with effect maxOccurs > 0
         effective_items = [x for x in model_items if x[1] != 0]
+        # (Li) trivial case: no item has maxOccur > 0 => all items have maxOccur = 0, then res = 0.
         if not effective_items:
             return 0
+        # (Li) this case should not happen. Each model group has a value maxOccur by default.
         elif self.max_occurs is None:
             return None
+        # (Li) 1. if the model group is choice, then
         elif self.model == 'choice':
+            # (Li) 1.1 an item does not have effective maxOccur. This should not happen.
             if any(x[1] is None for x in effective_items):
                 return None
+            # 1.2 res: the maximum effective maxOccur of items of choice * the maxOccur of choice.
             else:
                 max_occurs = max(x[1] for x in effective_items)
                 return self.max_occurs * max_occurs
 
+        # 2. model group is not choice.
+        # (Li) this should be the items with both maxOccurs > 0 and minOccurs > 0, so that they cannot be "emptied".
         not_emptiable_items = [x for x in effective_items if x[0].effective_min_occurs]
+        # (Li)2.1 if there is no item that can not be "emptied", which means all effective items can be emptied.
         if not not_emptiable_items:
+            # 2.1.1 again trivial case.
             if any(x[1] is None for x in effective_items):
                 return None
+            # 2.1.2 res: the maximum effective maxOccur of items of choice * the maxOccur of sequence (all?).
             else:
                 max_occurs = max(x[1] for x in effective_items)
                 return self.max_occurs * max_occurs
 
+        # 2.2 there is at least two items that must appear.
         elif len(not_emptiable_items) > 1:
+            # 2.2.1 if this model group is sequence, then res is the maxOccur of the sequence.
             if self.model == 'sequence':
                 return self.max_occurs
+            # 2.2.2 if the model group is all (choice should already be discussed)
+            # 2.2.2.1 trivial case, should not happen.
             elif all(x[1] is None for x in not_emptiable_items):
                 return None
+            # 2.2.2.2 res: the minumum of all effective maxOccurs of not empitable items.
             else:
                 max_occurs = min(x[1] for x in not_emptiable_items if x[1] is not None)
                 return max_occurs
+        # 2.3 there is only one not emptiable item
+        # 2.3.1 trivial: that only item has no effective maxOccur
         elif not_emptiable_items[0][1] is None:
             return None
+        # 2.3.2 res: (either sequence or all) maxOccur * effective maxOccur of the only not emptiable item
         else:
             return self.max_occurs * cast(int, not_emptiable_items[0][1])
 
@@ -1006,16 +1027,33 @@ class XsdGroup(XsdComponent, MutableSequence[ModelParticleType],
             converter.set_context(child, level)
             name = converter.map_qname(child.tag)
 
+            group_occurs_idx_not_increment:list[XsdGroup] = [] # Houcai
             while model.element is not None:
-                xsd_element = model.match_element(child.tag)
+                match_res = model.match_element(child.tag)
+
+                if isinstance(match_res, tuple):
+                    xsd_element, ref_element = match_res
+                    kwargs['ref_element'] = ref_element
+                else:
+                    xsd_element = match_res
+                    kwargs['ref_element'] = None
                 if xsd_element is None:
-                    for particle, occurs, expected in model.advance(False):
+                    # Houcai: model.advance updates model.element to the next element in the model group, as long as it does not violate the occurrence rules.
+                    model.end_of_mg = []
+                    stop_called_unm_0 = model.end_of_mg[:]
+                    # print("stop_called_unm_0", stop_called_unm_0)
+                    for particle, occurs, expected in model.advance(False): #Houcai: weird, if the group occurrence increments, only the count of the current element is reset. But it does not affect the functionality.
                         errors.append((index, particle, occurs, expected))
                         model.clear()
                         broken_model = True  # the model is broken, continues with raw decoding.
                         xsd_element = self.match_element(child.tag)
                         break
                     else:
+                        stop_called_unm_1 = model.end_of_mg[:]
+                        # print("stop_called_unm_1", stop_called_unm_1)
+                        if len(stop_called_unm_1) > len(stop_called_unm_0):
+                            group_occurs_idx_not_increment = stop_called_unm_1
+                            model.end_of_mg = []
                         continue
                     break
 
@@ -1024,8 +1062,44 @@ class XsdGroup(XsdComponent, MutableSequence[ModelParticleType],
                 except XMLSchemaValidationError as err:
                     yield self.validation_error(validation, err, obj, **kwargs)
 
+                model.end_of_mg = []
                 for particle, occurs, expected in model.advance(True):
                     errors.append((index, particle, occurs, expected))
+                stop_called_m_1:list[XsdGroup] = model.end_of_mg[:]
+                # print("stop_called_m_1", stop_called_m_1)
+                if len(stop_called_m_1) > 0:
+                    group_occurs_idx_not_increment = stop_called_m_1
+                    model.end_of_mg = []
+                else:
+                    group_occurs_idx_not_increment = []
+                # group_occurs_idx_not_increment = not (stop_called_m_1 is not None and stop_called_m_0 is None)
+                # model.end_of_mg = False
+
+                assert xsd_element is not None
+                if model.occurs[xsd_element] == 0: # Houcai: I don't know why I wrote this line. This shouldn't be 0.
+                    kwargs['occurs_idx'] = xsd_element.max_occurs
+                else :
+                    kwargs['occurs_idx'] = model.occurs[xsd_element]
+                # print("occurs_idx: " + str(xsd_element) + ", " + str(kwargs['occurs_idx']))
+
+                #Houcai: starting from the top, get all the group occurs indices.
+                group_occurs_indices = []
+                current_elem = xsd_element
+                while isinstance(current_elem.parent, XsdGroup):
+                    if current_elem.parent in model.occurs.keys():
+                        if current_elem.parent in group_occurs_idx_not_increment:
+                            if model.occurs[current_elem.parent] == 0:
+                                group_occurs_indices.append(current_elem.parent.max_occurs)
+                            else:
+                                group_occurs_indices.append(model.occurs[current_elem.parent])
+                        else:# TODO: check increment of a specific model group?
+                            group_occurs_indices.append(model.occurs[current_elem.parent] + 1)
+                    else:
+                        group_occurs_indices.append(1)
+                    current_elem = current_elem.parent
+                group_occurs_indices.reverse()
+                kwargs['group_occurs_indices'] = group_occurs_indices
+                # print("group_occurs_indices: " + str(xsd_element) + ", " + str(group_occurs_indices))
                 break
             else:
                 xsd_element = self.match_element(child.tag)

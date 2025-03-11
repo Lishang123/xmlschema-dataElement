@@ -198,7 +198,7 @@ class ModelVisitor:
     element: Optional[SchemaElementType]
     occurs: OccursCounterType
 
-    __slots__ = '_groups', 'root', 'occurs', 'element', 'group', 'items', 'match'
+    __slots__ = '_groups', 'root', 'occurs', 'element', 'group', 'items', 'match', 'end_of_mg'
 
     def __init__(self, root: ModelGroupType) -> None:
         self._groups = []
@@ -208,6 +208,7 @@ class ModelVisitor:
         self.group = root
         self.items = self.iter_group()
         self.match = False
+        self.end_of_mg = []
         self._start()
 
     def __repr__(self) -> str:
@@ -262,7 +263,7 @@ class ModelVisitor:
         else:
             yield from self.group.content
 
-    def match_element(self, tag: str) -> Optional[SchemaElementType]:
+    def match_element(self, tag: str) -> Union[None, SchemaElementType, Tuple[SchemaElementType, SchemaElementType]]:
         if self.element is None:
             raise XMLSchemaValueError(f"can't match the tag, {self!r} is ended!")
         elif self.element.max_occurs == 0:
@@ -274,7 +275,7 @@ class ModelVisitor:
         else:
             for xsd_element in self.element.iter_substitutes():
                 if tag == xsd_element.name:
-                    return xsd_element
+                    return (xsd_element, self.element) # Houcai: add the ref information to the result
             else:
                 return None
 
@@ -298,6 +299,11 @@ class ModelVisitor:
             nonlocal item
             nonlocal item_occurs
 
+            def increase_occurs(summand: int):
+                #if self.group not in occurs:
+                self.end_of_mg.append(self.group)
+                occurs[self.group] += summand
+
             item_occurs = occurs[item]
             if isinstance(item, groups.XsdGroup):
                 self.group, self.items, self.match = self._groups.pop()
@@ -310,11 +316,14 @@ class ModelVisitor:
                 min_occurs, max_occurs = get_occurs(item)
 
                 if max_occurs is None:
-                    occurs[self.group] += 1
+                    # occurs[self.group] += 1
+                    increase_occurs(1)
                 elif item_occurs % max_occurs:
-                    occurs[self.group] += 1 + item_occurs // max_occurs
+                    # occurs[self.group] += 1 + item_occurs // max_occurs
+                    increase_occurs(1 + item_occurs // max_occurs)
                 else:
-                    occurs[self.group] += item_occurs // max_occurs
+                    # occurs[self.group] += item_occurs // max_occurs
+                    increase_occurs(item_occurs // max_occurs)
 
                 occurs[self.group.oid] += (high_occurs // (min_occurs or 1)) or 1
 
@@ -340,7 +349,7 @@ class ModelVisitor:
                 item = self.group
                 return stop_item()
 
-            if item is self.group.content[-1]:
+            if item is self.group.content[-1]:# Houcai: end of model group
                 for k, item2 in enumerate(self.group.content, start=1):  # pragma: no cover
                     low_occurs = occurs[item2]
                     if not low_occurs:
@@ -349,11 +358,13 @@ class ModelVisitor:
                     high_occurs = occurs[item2.oid] or low_occurs
                     if high_occurs == 1 or \
                             any(not x.is_emptiable() for x in self.group.content[k:]):
-                        occurs[self.group] += 1
+                        # occurs[self.group] += 1
+                        increase_occurs(1)
                         occurs[self.group.oid] += 1
                         break
 
-                    occurs[self.group] += (low_occurs // (item2.max_occurs or low_occurs)) or 1
+                    # occurs[self.group] += (low_occurs // (item2.max_occurs or low_occurs)) or 1
+                    increase_occurs((low_occurs // (item2.max_occurs or low_occurs)) or 1)
                     occurs[self.group.oid] += (high_occurs // (item2.min_occurs or 1)) or 1
                     break
 
@@ -436,6 +447,7 @@ class ModelVisitor:
         while True:
             for item in particles:
                 if occurs[item]:
+                    self.end_of_mg.append(group)
                     occurs[group] = 1
 
                 if isinstance(item, groups.XsdGroup):
@@ -504,6 +516,7 @@ class ModelVisitor:
         model.element = self.element
         model.group = self.group
         model.match = self.match
+        model.end_of_mg = self.end_of_mg
         model.occurs = self.occurs.copy()
 
         # Can't copy iterators so create new ones and iter them at the same item

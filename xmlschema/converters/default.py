@@ -24,8 +24,8 @@ if TYPE_CHECKING:
 
 
 ElementData = namedtuple('ElementData',
-                         ['tag', 'text', 'content', 'attributes', 'xmlns'],
-                         defaults=(None, None, None, None))
+                         ['tag', 'text', 'content', 'attributes', 'xmlns','ref_element','occurs_idx', 'group_occurs_indices'],# Houcai: added 'ref_element'
+                         defaults=(None, None, None, None, None)) #Houcai: don't forget to add default value
 """
 Namedtuple for Element data interchange between decoders and converters.
 The field *tag* is a string containing the Element's tag, *text* can be `None`

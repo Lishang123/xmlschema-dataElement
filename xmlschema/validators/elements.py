@@ -817,8 +817,18 @@ class XsdElement(XsdComponent, ParticleMixin,
 
         xmlns = converter.set_context(obj, level)  # Purge existing sub-contexts
 
+        ref_elem = None
+        occurs_idx = None
+        group_occurs_indices = None
+        if 'ref_element' in kwargs and kwargs['ref_element']:
+            ref_elem = kwargs['ref_element']
+        if 'occurs_idx' in kwargs and kwargs['occurs_idx']:
+            occurs_idx = kwargs['occurs_idx']
+        if 'group_occurs_indices' in kwargs and kwargs['group_occurs_indices']:
+            group_occurs_indices = kwargs['group_occurs_indices']
+
         if isinstance(converter, XMLSchemaConverter):
-            element_data = ElementData(obj.tag, value, content, attributes, xmlns)
+            element_data = ElementData(obj.tag, value, content, attributes, xmlns, ref_elem, occurs_idx, group_occurs_indices)
             if 'element_hook' in kwargs:
                 element_data = kwargs['element_hook'](element_data, self, xsd_type)
 
