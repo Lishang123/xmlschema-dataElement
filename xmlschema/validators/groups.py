@@ -1073,7 +1073,6 @@ class XsdGroup(XsdComponent, MutableSequence[ModelParticleType],
                 else:
                     group_occurs_idx_not_increment = []
                 # group_occurs_idx_not_increment = not (stop_called_m_1 is not None and stop_called_m_0 is None)
-                # model.end_of_mg = False
 
                 assert xsd_element is not None
                 if model.occurs[xsd_element] == 0: # Houcai: I don't know why I wrote this line. This shouldn't be 0.
