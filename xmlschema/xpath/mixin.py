@@ -121,8 +121,17 @@ class ElementPathMixin(Sequence[E_co]):
         namespaces = self._get_xpath_namespaces(namespaces)
         parser = XPath2Parser(namespaces, strict=False)
         context = XPathSchemaContext(self.xpath_node)
+        res_ls = list(parser.parse(path).select_results(context))
+        if len(res_ls) > 1:
+            for pot_res in res_ls:
+                # Houcai: this is 100% not everything but I just need to fix this special case
+                if pot_res.prefixed_name and pot_res.prefixed_name == path:
+                    return cast(Optional[E_co], pot_res)
+        if len(res_ls) == 0:
+            return None
+        return cast(Optional[E_co], res_ls[0])
 
-        return cast(Optional[E_co], next(parser.parse(path).select_results(context), None))
+        # return cast(Optional[E_co], next(parser.parse(path).select_results(context), None))
 
     def findall(self, path: str, namespaces: Optional[NamespacesType] = None) -> List[E_co]:
         """
