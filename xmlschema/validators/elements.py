@@ -820,7 +820,7 @@ class XsdElement(XsdComponent, ParticleMixin,
         ref_elem = None
         occurs_idx = None
         group_occurs_indices = None
-        if 'ref_element' in kwargs and kwargs['ref_element']:
+        if 'ref_element' in kwargs and kwargs['ref_element'] is not None:
             ref_elem = kwargs['ref_element']
         if 'occurs_idx' in kwargs and kwargs['occurs_idx']:
             occurs_idx = kwargs['occurs_idx']

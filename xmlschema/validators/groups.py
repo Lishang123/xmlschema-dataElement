@@ -1083,7 +1083,8 @@ class XsdGroup(XsdComponent, MutableSequence[ModelParticleType],
 
                 #Houcai: starting from the top, get all the group occurs indices.
                 group_occurs_indices = []
-                current_elem = xsd_element
+                # use ref_element to find the model group of the reference.
+                current_elem = ref_element if kwargs['ref_element'] is not None else xsd_element
                 while isinstance(current_elem.parent, XsdGroup):
                     if current_elem.parent in model.occurs.keys():
                         if current_elem.parent in group_occurs_idx_not_increment:
@@ -1091,7 +1092,7 @@ class XsdGroup(XsdComponent, MutableSequence[ModelParticleType],
                                 group_occurs_indices.append(current_elem.parent.max_occurs)
                             else:
                                 group_occurs_indices.append(model.occurs[current_elem.parent])
-                        else:# TODO: check increment of a specific model group?
+                        else:
                             group_occurs_indices.append(model.occurs[current_elem.parent] + 1)
                     else:
                         group_occurs_indices.append(1)
